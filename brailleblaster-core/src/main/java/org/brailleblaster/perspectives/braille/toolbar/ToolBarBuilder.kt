@@ -579,8 +579,8 @@ class ToolBarBuilder(
                 }
             }
             for (section in customToolbars) {
-                //height += section.getHeight();
-                height += 35 //Magic number - section.getHeight returns 0 periodically, and is not 100% reliable.
+                val measuredHeight = section.height
+                height += if (measuredHeight > 0) measuredHeight else 35
             }
             return height
         }

@@ -74,27 +74,21 @@ class AutoFillSpecialSymbols(
         val simBraille = Font(Display.getCurrent(), "SimBraille", statusText.font.fontData[0].getHeight(), SWT.NORMAL)
 
         val onFind = { symbol: String, location: String ->
-            var curLength = statusText.text.length
-            statusText.append(FOUND_SYMBOL_MESSAGE_1 + symbol + FOUND_SYMBOL_MESSAGE_2 + location + "\n")
-            curLength += FOUND_SYMBOL_MESSAGE_1.length
-
-            statusText.setStyleRange(createFontRange(curLength, symbol.length, simBraille))
-            curLength += symbol.length + FOUND_SYMBOL_MESSAGE_2.length
-            statusText.setStyleRange(createFontRange(curLength, location.length, simBraille))
-
-            statusText.setSelection(statusText.text.length - 1)
-            val display = Display.getCurrent()
-            while (display.readAndDispatch()) {
-                display.sleep()
+            Display.getDefault().asyncExec {
+                var curLength = statusText.text.length
+                statusText.append(FOUND_SYMBOL_MESSAGE_1 + symbol + FOUND_SYMBOL_MESSAGE_2 + location + "\n")
+                curLength += FOUND_SYMBOL_MESSAGE_1.length
+                statusText.setStyleRange(createFontRange(curLength, symbol.length, simBraille))
+                curLength += symbol.length + FOUND_SYMBOL_MESSAGE_2.length
+                statusText.setStyleRange(createFontRange(curLength, location.length, simBraille))
+                statusText.setSelection(statusText.text.length)
             }
         }
 
         val onMessage = { s: String ->
-            statusText.append(s + "\n")
-            statusText.setSelection(statusText.text.length - 1)
-            val display = Display.getCurrent()
-            while (display.readAndDispatch()) {
-                display.sleep()
+            Display.getDefault().asyncExec {
+                statusText.append(s + "\n")
+                statusText.setSelection(statusText.text.length)
             }
         }
 
@@ -102,13 +96,23 @@ class AutoFillSpecialSymbols(
             override fun widgetSelected(e: SelectionEvent) {
                 @Suppress("UNCHECKED_CAST")
                 val data = beginButton.data as? List<List<SpecialSymbols.Symbol>>
-                if (data == null) { //This is janky
+                if (data == null) {
                     cancelButton.isEnabled = false
                     beginButton.isEnabled = false
-                    beginButton.data = beginAutoFill(onFind, onMessage, if (radio1.selection) curVolume else -1)
-                    beginButton.isEnabled = true
-                    cancelButton.isEnabled = true
-                    beginButton.text = "Continue"
+                    beginButton.text = "Searching..."
+
+                    // Capture radio selection ON UI THREAD before starting background thread
+                    val selectedVolume = if (radio1.selection) curVolume else -1
+
+                    Thread {
+                        val results = beginAutoFill(onFind, onMessage, selectedVolume)
+                        Display.getDefault().asyncExec {
+                            beginButton.data = results
+                            beginButton.isEnabled = true
+                            cancelButton.isEnabled = true
+                            beginButton.text = "Continue"
+                        }
+                    }.start()
                 } else {
                     verifyResults(parent, data)
                     dialog.close()
